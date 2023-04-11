@@ -16,7 +16,9 @@ def get_scrapeops_url(url):
     return proxy_url
 
 class ScrapeJustwatchSpider(scrapy.Spider):
+
     name = 'scrape_from_urls_only_season_1_and_movies'
+
     custom_settings = {
         'FEEDS':{
             'output/multiple_data.csv': {
@@ -24,6 +26,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             }
         }
     }
+    
     allowed_domains = [allowed_domains]
 
     headers = {
@@ -61,6 +64,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         popularity = response.meta.get('popularity')
         movie_url = response.meta.get('movie_url')
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
+        year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
+        year = year.replace('(','').replace(')','')
         if "tv-series" in movie_url or "tv-show" in movie_url:
             h2_headings = response.css('h2[class="detail-infos__subheading--label"]')
             for heading in h2_headings:
@@ -78,6 +83,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                                 method='GET',
                                 headers=self.headers,
                                 meta = {
+                                        'year' : year,
                                         'popularity' : popularity, 
                                         'movie_url': season_url,
                                         'synopsis' : synopsis
@@ -116,8 +122,14 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         if back_drop_urls_list:
             back_drop_url = back_drop_urls_list.split(',')[1].replace('2x','')
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
+        if synopsis:
+            synopsis = re.sub('\s+',' ', synopsis)
+            synopsis = synopsis.strip()
         if synopsis == None:
             synopsis = response.meta.get('synopsis')
+            if synopsis:
+                synopsis = re.sub('\s+',' ', synopsis)
+                synopsis = synopsis.strip()
         imdb_rating = response.css('div[v-uib-tooltip="IMDB"] a::text').get()
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
@@ -204,7 +216,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         movie_name = web_deep_link.split('/')[-2]
         season_name = web_deep_link.split('/')[-1]
         if "tv-series" in web_deep_link:
-            movie_id = f"{movie_name}-{season_name}"
+            movie_id = f"tv-series/{movie_name}-{season_name}"
         elif "tv-show" in web_deep_link:
             movie_id = f"tv-show/{movie_name}-{season_name}"
         popularity = response.meta.get('popularity')
@@ -214,6 +226,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             season = season.replace('-',' ')
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
         year = year.replace('(','').replace(')','')
+        if year == '':
+            year = response.meta.get('year')
         episodes = []
         episodes_list = response.css('[class="episodes-item"] span[class="episodes-item__heading--title"]')
         for episode in episodes_list:
@@ -229,8 +243,14 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         if back_drop_urls_list:
             back_drop_url = back_drop_urls_list.split(',')[1].replace('2x','')
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
+        if synopsis:
+            synopsis = re.sub('\s+',' ', synopsis)
+            synopsis = synopsis.strip()
         if synopsis == None:
             synopsis = response.meta.get('synopsis')
+            if synopsis:
+                synopsis = re.sub('\s+',' ', synopsis)
+                synopsis = synopsis.strip()
         imdb_rating = response.css('div[v-uib-tooltip="IMDB"] a::text').get()
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
