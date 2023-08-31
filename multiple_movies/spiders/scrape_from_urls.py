@@ -1,5 +1,5 @@
-#  SCRAPE USING URLS INPUT FROM CSV WITH SEASON-1 ONLY
-#  REMOVE CONDITION AT LINE 75 FOR ALL SEASONS TO BE SCRAPED IN FUNCTION "parse_movie_page"
+#  SCRAPE USING URLS INPUT FROM JustWatch urls CSV WITH SEASON-1 ONLY
+#  REMOVE CONDITION AT LINE 80 FOR ALL SEASONS TO BE SCRAPED IN FUNCTION "parse_movie_page"
 
 import csv
 from urllib.parse import urlencode
@@ -66,18 +66,18 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
         year = year.replace('(','').replace(')','')
-        if "tv-series" in movie_url or "tv-show" in movie_url:
+        if movie_url and "tv-series" in movie_url or "tv-show" in movie_url:
             h2_headings = response.css('h2[class="detail-infos__subheading--label"]')
             for heading in h2_headings:
                 heading_text = heading.css('*::text').get()
-                if 'Season' in heading_text:
+                if heading_text and 'Season' in heading_text:
                     number_of_seasons = ''.join(filter(str.isdigit, heading_text))
                     print(number_of_seasons)
                     seasons_list = response.css(f'div[itemamount="{number_of_seasons}"] div[class="horizontal-title-list__item"]')
                     for season in seasons_list:
                         url = season.css('a::attr("href")').get()
                         season_url = f"{base_url}{url}"
-                        if re.search(r'\bseason-1\b', url): 
+                        if re.search(r'\bseason-1\b', url):
                             yield Request(
                                 get_scrapeops_url(season_url),
                                 method='GET',
@@ -91,7 +91,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                                 callback=self.parse_seasons,
                                 dont_filter=True
                             )
-        elif "movie" in movie_url:
+        elif movie_url and "movie" in movie_url:
             yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url}, callback=self.parse_movie, dont_filter=True)
         
 
@@ -154,11 +154,11 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
             h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
-            if 'Genres' in h3_tag:
+            if h3_tag and 'Genres' in h3_tag:
                 genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Runtime' in  h3_tag:
+            if h3_tag and 'Runtime' in  h3_tag:
                 runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
-                if 'h' in runtime:
+                if runtime and 'h' in runtime:
                     hours = runtime.split('h')[0]
                     if hours:
                         mins = runtime.split('h')[1].replace(" ",'')
@@ -172,9 +172,9 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                         length = f"{total_minutes} Min"
                 else:
                     length = runtime
-            if 'Age rating' in h3_tag:
+            if h3_tag and 'Age rating' in h3_tag:
                 pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Director' in h3_tag:
+            if h3_tag and 'Director' in h3_tag:
                 director = tag.css('[class="detail-infos__subheading"]+div span a::text').get()
             casts_tags = response.css('[class="title-credits__actor"] a')
             for cast in casts_tags:
@@ -215,10 +215,11 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         web_deep_link = response.meta.get('movie_url')
         movie_name = web_deep_link.split('/')[-2]
         season_name = web_deep_link.split('/')[-1]
-        if "tv-series" in web_deep_link:
-            movie_id = f"tv-series/{movie_name}-{season_name}"
-        elif "tv-show" in web_deep_link:
-            movie_id = f"tv-show/{movie_name}-{season_name}"
+        if web_deep_link:
+            if "tv-series" in web_deep_link:
+                movie_id = f"tv-series/{movie_name}-{season_name}"
+            elif "tv-show" in web_deep_link:
+                movie_id = f"tv-show/{movie_name}-{season_name}"
         popularity = response.meta.get('popularity')
         title = response.xpath('//div[@class="title-block"]//h1/a/text()').get()
         season = season_name
@@ -275,28 +276,29 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
             h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
-            if 'Genres' in h3_tag:
-                genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Runtime' in  h3_tag:
-                runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
-                if 'h' in runtime:
-                    hours = runtime.split('h')[0]
-                    if hours:
-                        mins = runtime.split('h')[1].replace(" ",'')
-                        numeric_filter = filter(str.isdigit, mins)
-                        min_string = "".join(numeric_filter)
-                        hours_to_mins = int(hours) * 60
-                        if min_string != '':
-                            total_minutes = hours_to_mins + int(min_string)
-                        else:
-                            total_minutes = hours_to_mins
-                        length = f"{total_minutes} Min"
-                else:
-                    length = runtime
-            if 'Age rating' in h3_tag:
-                pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Director' in h3_tag:
-                director = tag.css('[class="detail-infos__subheading"]+div span a::text').get()
+            if h3_tag:
+                if 'Genres' in h3_tag:
+                    genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                if 'Runtime' in  h3_tag:
+                    runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                    if 'h' in runtime:
+                        hours = runtime.split('h')[0]
+                        if hours:
+                            mins = runtime.split('h')[1].replace(" ",'')
+                            numeric_filter = filter(str.isdigit, mins)
+                            min_string = "".join(numeric_filter)
+                            hours_to_mins = int(hours) * 60
+                            if min_string != '':
+                                total_minutes = hours_to_mins + int(min_string)
+                            else:
+                                total_minutes = hours_to_mins
+                            length = f"{total_minutes} Min"
+                    else:
+                        length = runtime
+                if 'Age rating' in h3_tag:
+                    pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                if 'Director' in h3_tag:
+                    director = tag.css('[class="detail-infos__subheading"]+div span a::text').get()
             casts_tags = response.css('[class="title-credits__actor"] a')
             for cast in casts_tags:
                 actor = cast.css('*::text').get()
