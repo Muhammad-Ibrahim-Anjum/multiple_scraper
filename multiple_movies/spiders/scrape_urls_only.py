@@ -4,6 +4,7 @@ import csv
 import time
 from selenium.webdriver.chrome.options import Options
 from fake_useragent import UserAgent
+from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium import webdriver
@@ -27,8 +28,11 @@ class JustWatchScrape:
         chrome_options.add_argument('--disable-browser-side-navigation')
         chrome_options.add_argument("--dns-prefetch-disable")
         chrome_options.add_argument("--disable-javascript")
-        driver = webdriver.Chrome(
-            executable_path=chromedriver_autoinstaller.install(), chrome_options=chrome_options)
+
+        # driver = webdriver.Chrome(
+        #     executable_path=chromedriver_autoinstaller.install(), chrome_options=chrome_options)
+        driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()),options=chrome_options)
+        
         driver.set_page_load_timeout(300)
         return driver
 

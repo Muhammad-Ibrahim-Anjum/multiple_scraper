@@ -1,4 +1,5 @@
 # SCRAPE USING SEARCH QUERY USING IMDB CSV INPUT
+# REMOVE CONDITION AT LINE 110 FOR ALL SEASONS TO BE SCRAPED IN FUNCTION "parse_movie_page"
 
 import csv
 import re
@@ -21,7 +22,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             'output/multiple_data.csv': {
                 'format':'csv',
             }
-        }
+        },
+        'FEED_EXPORT_FIELDS' : ['imdb_id','streaming_source','id', 'name', 'year', 'rating', 'imdb_rating', 'popularity', 'summary', 'length', 'genres', 'directors', 'actors', 'supporting_actors', 'producers', 'writers', 'studio', 'pg_rating','content_advisory', 'seasons', 'episodes', 'web_link', 'ios_deep_link', 'android_deep_link',   'trailer_url', 'poster_url', 'backdrop_url']
     }
     allowed_domains = [allowed_domains]
 
@@ -41,11 +43,15 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         with open('input_files/cleaned_imdb_urls.csv','r') as file:
             reader = csv.reader(file)
             for idx, row in enumerate(reader):
+                # name = row[3]  ##name
+                # popularity = row[4]  ##popularity 
+                # self.urls_done.append(row[6])  ##url
+
                 name = row[0]
                 popularity = row[2]
                 self.urls_done.append(row[1])
                 search_query = f"{base_url}/in/search?q={name}"
-                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity}, callback=self.search_result_links)
+                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"imdb_url":row[1]}, callback=self.search_result_links)
         
         self.done_urls_data()
 
@@ -60,6 +66,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     def search_result_links(self, response):
         urls = response.css('a[class="title-list-row__column-header"]')
         popularity = response.meta.get('popularity')
+        imdb_url = response.meta.get('imdb_url')
+
         for url in urls:
             link = url.css('*::attr("href")').get()
             complete_link = f"{base_url}{link}"
@@ -69,7 +77,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                 headers=self.headers,
                 meta = {
                         'popularity' : popularity, 
-                        'movie_url': complete_link
+                        'movie_url': complete_link,
+                        'imdb_url':imdb_url
                         }, 
                 callback=self.parse_movie_page, 
                 dont_filter=True
@@ -79,10 +88,13 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     def parse_movie_page(self, response):
         popularity = response.meta.get('popularity')
         movie_url = response.meta.get('movie_url')
+        imdb_url = response.meta.get('imdb_url')
+
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
         year = year.replace('(','').replace(')','')
-        if "tv-series" in movie_url or "tv-show" in movie_url:
+
+        if movie_url and "tv-series" in movie_url or "tv-show" in movie_url:
             h2_headings = response.css('h2[class="detail-infos__subheading--label"]')
             for heading in h2_headings:
                 heading_text = heading.css('*::text').get()
@@ -93,21 +105,23 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                     for season in seasons_list:
                         url = season.css('a::attr("href")').get()
                         season_url = f"{base_url}{url}"
-                        yield Request(
-                            get_scrapeops_url(season_url),
-                            method='GET',
-                            headers=self.headers,
-                            meta = {
-                                    'year' : year,
-                                    'popularity' : popularity, 
-                                    'movie_url': season_url,
-                                    'synopsis' : synopsis
-                                    }, 
-                            callback=self.parse_seasons,
-                            dont_filter=True
-                        )
+                        if re.search(r'\bseason-1\b', url):
+                            yield Request(
+                                get_scrapeops_url(season_url),
+                                method='GET',
+                                headers=self.headers,
+                                meta = {
+                                        'year' : year,
+                                        'popularity' : popularity, 
+                                        'movie_url': season_url,
+                                        'synopsis' : synopsis,
+                                        "imdb_url":imdb_url
+                                        }, 
+                                callback=self.parse_seasons,
+                                dont_filter=True
+                            )
         elif "movie" in movie_url:
-            yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url}, callback=self.parse_movie, dont_filter=True)
+            yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url,"imdb_url":imdb_url}, callback=self.parse_movie, dont_filter=True)
         
     def parse_movie(self, response):
         pg_rating = str()
@@ -119,8 +133,11 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         imdb_id = ''
         poster_url = ''
         back_drop_url = ''
+        imdb_rating = None
+
         popularity = response.meta.get('popularity')
         web_deep_link = response.meta.get('movie_url')
+        imdb_url = response.meta.get('imdb_url')
         movie_id = web_deep_link.split('/')[-1]
         title = response.xpath('//div[@class="title-block"]//h1/text()').get()
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
@@ -135,26 +152,35 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             back_drop_url = back_drop_urls_list.split(',')[1].replace('2x','')
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
         if synopsis:
-            synopsis = re.sub(r"[\n\t\s]*", "", synopsis)
+            synopsis = re.sub(r"[\n\t]*", "", synopsis)
         if synopsis == None:
             synopsis = response.meta.get('synopsis')
-            synopsis = re.sub(r"[\n\t\s]*", "", synopsis)
-        imdb_rating = response.css('div[v-uib-tooltip="IMDB"] a::text').get()
+            if synopsis:
+                synopsis = re.sub(r"[\n\t]*", "", synopsis)
+
+        imdb_img_tag = response.css('.detail-infos__value .jw-scoring-listing__rating span img[alt="IMDB"]')
+    
+        for imdb_rating in imdb_img_tag:
+            parent_span = imdb_rating.xpath('./ancestor::span')
+            if parent_span:
+                imdb_rating = parent_span.css('::text').get().strip()
+
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
-        imdb_url = response.css('div[v-uib-tooltip="IMDB"] a::attr("href")').get()
         if imdb_url:
             imdb_id = imdb_url.split('/')[-2]
-        streaming_source_tag = response.css('[class="monetizations"] div[class="price-comparison__grid__row price-comparison__grid__row--stream price-comparison__grid__row--block"] a ')
-        for streaming in streaming_source_tag:
-            streaming_source = streaming.css('img::attr("title")').get()
-            streaming_sources.append(streaming_source)
+
+        streaming_sources = response.css(
+            'div.buybox-row.stream div.buybox-row__offers img.offer__icon::attr(alt)').getall()
+        streaming_sources = list(set(streaming_sources))
+
+        
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
-            h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
-            if 'Genres' in h3_tag:
+            h3_tag = tag.css('h3.detail-infos__subheading::text').get()
+            if h3_tag and 'Genres' in h3_tag:
                 genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Runtime' in  h3_tag:
+            if h3_tag and 'Runtime' in h3_tag:
                 runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
                 if 'h' in runtime:
                     hours = runtime.split('h')[0]
@@ -170,13 +196,14 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                         length = f"{total_minutes} Min"
                 else:
                     length = runtime
-            if 'Age rating' in h3_tag:
+            if h3_tag and 'Director' in h3_tag:
+                director = tag.css('[class="detail-infos__subheading"]+div span::text').get()
+            if h3_tag and 'Age rating' in h3_tag:
                 pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Director' in h3_tag:
-                director = tag.css('[class="detail-infos__subheading"]+div span a::text').get()
-            casts_tags = response.css('[class="title-credits__actor"] a')
+
+            casts_tags = response.css('div.title-credits__actor span.title-credit-name')
             for cast in casts_tags:
-                actor = cast.css('*::text').get()
+                actor = cast.css('::text').get()
                 casts.append(actor)
 
         details = MultipleMoviesItem(
@@ -210,6 +237,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         imdb_id = ''
         poster_url = ''
         web_deep_link = response.meta.get('movie_url')
+        imdb_url = response.meta.get('imdb_url')
+
         movie_name = web_deep_link.split('/')[-2]
         season_name = web_deep_link.split('/')[-1]
         if "tv-series" in web_deep_link:
@@ -241,20 +270,27 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             back_drop_url = back_drop_urls_list.split(',')[1].replace('2x','')
         synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
         if synopsis:
-            synopsis = re.sub(r"[\n\t\s]*", "", synopsis)
+            synopsis = re.sub(r"[\n\t]*", "", synopsis)
         if synopsis == None:
             synopsis = response.meta.get('synopsis')
-            synopsis = re.sub(r"[\n\t\s]*", "", synopsis)
-        imdb_rating = response.css('div[v-uib-tooltip="IMDB"] a::text').get()
+            if synopsis:
+                synopsis = re.sub(r"[\n\t]*", "", synopsis)
+
+        imdb_img_tag = response.css('.detail-infos__value .jw-scoring-listing__rating span img[alt="IMDB"]')
+    
+        for imdb_rating in imdb_img_tag:
+            parent_span = imdb_rating.xpath('./ancestor::span')
+            if parent_span:
+                imdb_rating = parent_span.css('::text').get().strip()
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
-        imdb_url = response.css('div[v-uib-tooltip="IMDB"] a::attr("href")').get()
+
         if imdb_url:
             imdb_id = imdb_url.split('/')[-2]
-        streaming_source_tag = response.css('[class="monetizations"] div[class="price-comparison__grid__row price-comparison__grid__row--stream price-comparison__grid__row--block"] a ')
-        for streaming in streaming_source_tag:
-            streaming_source = streaming.css('img::attr("title")').get()
-            streaming_sources.append(streaming_source)
+
+        streaming_sources = response.css(
+            'div.buybox-row.stream div.buybox-row__offers img.offer__icon::attr(alt)').getall()
+        streaming_sources = list(set(streaming_sources))
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
             h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
@@ -279,10 +315,10 @@ class ScrapeJustwatchSpider(scrapy.Spider):
             if 'Age rating' in h3_tag:
                 pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
             if 'Director' in h3_tag:
-                director = tag.css('[class="detail-infos__subheading"]+div span a::text').get()
-            casts_tags = response.css('[class="title-credits__actor"] a')
+                director = tag.css('[class="detail-infos__subheading"]+div span::text').get()
+            casts_tags = response.css('div.title-credits__actor span.title-credit-name')
             for cast in casts_tags:
-                actor = cast.css('*::text').get()
+                actor = cast.css('::text').get()
                 casts.append(actor)
 
         details = MultipleMoviesItem(
