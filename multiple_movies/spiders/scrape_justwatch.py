@@ -40,18 +40,18 @@ class ScrapeJustwatchSpider(scrapy.Spider):
 
     urls_done = []
     def start_requests(self):
-        with open('input_files/cleaned_imdb_urls.csv','r') as file:
+        with open('input_files/imdb_details_data_2023.csv','r') as file:
             reader = csv.reader(file)
             for idx, row in enumerate(reader):
-                # name = row[3]  ##name
-                # popularity = row[4]  ##popularity 
-                # self.urls_done.append(row[6])  ##url
+                name = row[3]  ##name
+                popularity = row[7]  ##popularity 
+                self.urls_done.append(row[21])  ##url
 
-                name = row[0]
-                popularity = row[2]
-                self.urls_done.append(row[1])
+                # name = row[0]
+                # popularity = row[2]
+                # self.urls_done.append(row[1])
                 search_query = f"{base_url}/in/search?q={name}"
-                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"imdb_url":row[1]}, callback=self.search_result_links)
+                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"imdb_url":row[21]}, callback=self.search_result_links)
         
         self.done_urls_data()
 
@@ -97,7 +97,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         if movie_url and "tv-series" in movie_url or "tv-show" in movie_url:
             h2_headings = response.css('h2[class="detail-infos__subheading--label"]')
             for heading in h2_headings:
-                heading_text = heading.css('*::text').get()
+                heading_text = heading.css('*::text').get().upper()
                 if 'SEASONS' in heading_text:
                     number_of_seasons = ''.join(filter(str.isdigit, heading_text))
                     print(number_of_seasons)
@@ -294,28 +294,29 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
             h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
-            if 'Genres' in h3_tag:
-                genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Runtime' in  h3_tag:
-                runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
-                if 'h' in runtime:
-                    hours = runtime.split('h')[0]
-                    if hours:
-                        mins = runtime.split('h')[1].replace(" ",'')
-                        numeric_filter = filter(str.isdigit, mins)
-                        min_string = "".join(numeric_filter)
-                        hours_to_mins = int(hours) * 60
-                        if min_string != '':
-                            total_minutes = hours_to_mins + int(min_string)
-                        else:
-                            total_minutes = hours_to_mins
-                        length = f"{total_minutes} Min"
-                else:
-                    length = runtime
-            if 'Age rating' in h3_tag:
-                pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
-            if 'Director' in h3_tag:
-                director = tag.css('[class="detail-infos__subheading"]+div span::text').get()
+            if h3_tag:
+                if 'Genres' in h3_tag:
+                    genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                if 'Runtime' in  h3_tag:
+                    runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                    if 'h' in runtime:
+                        hours = runtime.split('h')[0]
+                        if hours:
+                            mins = runtime.split('h')[1].replace(" ",'')
+                            numeric_filter = filter(str.isdigit, mins)
+                            min_string = "".join(numeric_filter)
+                            hours_to_mins = int(hours) * 60
+                            if min_string != '':
+                                total_minutes = hours_to_mins + int(min_string)
+                            else:
+                                total_minutes = hours_to_mins
+                            length = f"{total_minutes} Min"
+                    else:
+                        length = runtime
+                if 'Age rating' in h3_tag:
+                    pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                if 'Director' in h3_tag:
+                    director = tag.css('[class="detail-infos__subheading"]+div span::text').get()
             casts_tags = response.css('div.title-credits__actor span.title-credit-name')
             for cast in casts_tags:
                 actor = cast.css('::text').get()
