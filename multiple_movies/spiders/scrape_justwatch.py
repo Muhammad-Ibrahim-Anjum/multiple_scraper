@@ -97,29 +97,31 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         if movie_url and "tv-series" in movie_url or "tv-show" in movie_url:
             h2_headings = response.css('h2[class="detail-infos__subheading--label"]')
             for heading in h2_headings:
-                heading_text = heading.css('*::text').get().upper()
-                if 'SEASONS' in heading_text:
-                    number_of_seasons = ''.join(filter(str.isdigit, heading_text))
-                    print(number_of_seasons)
-                    seasons_list = response.css(f'div[itemamount="{number_of_seasons}"] div[class="horizontal-title-list__item"]')
-                    for season in seasons_list:
-                        url = season.css('a::attr("href")').get()
-                        season_url = f"{base_url}{url}"
-                        if re.search(r'\bseason-1\b', url):
-                            yield Request(
-                                get_scrapeops_url(season_url),
-                                method='GET',
-                                headers=self.headers,
-                                meta = {
-                                        'year' : year,
-                                        'popularity' : popularity, 
-                                        'movie_url': season_url,
-                                        'synopsis' : synopsis,
-                                        "imdb_url":imdb_url
-                                        }, 
-                                callback=self.parse_seasons,
-                                dont_filter=True
-                            )
+                heading_text = heading.css('*::text').get()
+                if heading_text:
+                    heading_text = heading_text.upper()
+                    if 'SEASONS' in heading_text:
+                        number_of_seasons = ''.join(filter(str.isdigit, heading_text))
+                        print(number_of_seasons)
+                        seasons_list = response.css(f'div[itemamount="{number_of_seasons}"] div[class="horizontal-title-list__item"]')
+                        for season in seasons_list:
+                            url = season.css('a::attr("href")').get()
+                            season_url = f"{base_url}{url}"
+                            if re.search(r'\bseason-1\b', url):
+                                yield Request(
+                                    get_scrapeops_url(season_url),
+                                    method='GET',
+                                    headers=self.headers,
+                                    meta = {
+                                            'year' : year,
+                                            'popularity' : popularity, 
+                                            'movie_url': season_url,
+                                            'synopsis' : synopsis,
+                                            "imdb_url":imdb_url
+                                            }, 
+                                    callback=self.parse_seasons,
+                                    dont_filter=True
+                                )
         elif "movie" in movie_url:
             yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url,"imdb_url":imdb_url}, callback=self.parse_movie, dont_filter=True)
         
