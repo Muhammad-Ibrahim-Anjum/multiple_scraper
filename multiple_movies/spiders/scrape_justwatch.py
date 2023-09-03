@@ -10,6 +10,8 @@ from urllib.parse import urlencode
 from multiple_movies.items import MultipleMoviesItem
 from creds import API_KEY, origin, referer, authority, allowed_domains, base_url
 
+YEAR = '2023'
+
 def get_scrapeops_url(url):
     payload = {'api_key': API_KEY, 'url': url, 'keep_headers': True}
     proxy_url = 'https://proxy.scrapeops.io/v1/?' + urlencode(payload)
@@ -43,6 +45,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         with open('input_files/imdb_details_data_2023.csv','r') as file:
             reader = csv.reader(file)
             for idx, row in enumerate(reader):
+                if idx == 0:  # Skip the header row
+                    continue
                 name = row[3]  ##name
                 popularity = row[7]  ##popularity 
                 self.urls_done.append(row[21])  ##url
@@ -51,7 +55,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                 # popularity = row[2]
                 # self.urls_done.append(row[1])
                 search_query = f"{base_url}/in/search?q={name}"
-                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"imdb_url":row[21]}, callback=self.search_result_links)
+                yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"synopsis":row[8]}, callback=self.search_result_links)
         
         self.done_urls_data()
 
@@ -64,12 +68,17 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     
 
     def search_result_links(self, response):
-        urls = response.css('a[class="title-list-row__column-header"]')
+        imdb_id = re.findall(r'"imdbId":"(.+?)"', response.text)
+        if len(imdb_id)>0:
+            imdb_id = imdb_id[0]
+        else:
+            imdb_id = ''
+
+        urls = response.css(f'a.title-list-row__column-header span.header-year:contains("{YEAR}")')
         popularity = response.meta.get('popularity')
-        imdb_url = response.meta.get('imdb_url')
 
         for url in urls:
-            link = url.css('*::attr("href")').get()
+            link = url.xpath('ancestor::a/@href').get()
             complete_link = f"{base_url}{link}"
             yield Request(
                 get_scrapeops_url(complete_link),
@@ -78,7 +87,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                 meta = {
                         'popularity' : popularity, 
                         'movie_url': complete_link,
-                        'imdb_url':imdb_url
+                        'imdb_id':imdb_id,
+                        'synopsis':response.meta.get('synopsis')
                         }, 
                 callback=self.parse_movie_page, 
                 dont_filter=True
@@ -88,9 +98,9 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     def parse_movie_page(self, response):
         popularity = response.meta.get('popularity')
         movie_url = response.meta.get('movie_url')
-        imdb_url = response.meta.get('imdb_url')
+        imdb_id = response.meta.get('imdb_id')
+        synopsis = response.meta.get('synopsis')
 
-        synopsis = response.xpath('//p[@class="text-wrap-pre-line mt-0"]/span/text()').get()
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
         year = year.replace('(','').replace(')','')
 
@@ -102,7 +112,6 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                     heading_text = heading_text.upper()
                     if 'SEASONS' in heading_text:
                         number_of_seasons = ''.join(filter(str.isdigit, heading_text))
-                        print(number_of_seasons)
                         seasons_list = response.css(f'div[itemamount="{number_of_seasons}"] div[class="horizontal-title-list__item"]')
                         for season in seasons_list:
                             url = season.css('a::attr("href")').get()
@@ -117,13 +126,13 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                                             'popularity' : popularity, 
                                             'movie_url': season_url,
                                             'synopsis' : synopsis,
-                                            "imdb_url":imdb_url
+                                            "imdb_id":imdb_id
                                             }, 
                                     callback=self.parse_seasons,
                                     dont_filter=True
                                 )
         elif "movie" in movie_url:
-            yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url,"imdb_url":imdb_url}, callback=self.parse_movie, dont_filter=True)
+            yield Request(get_scrapeops_url(movie_url), method='GET', headers=self.headers, meta = {'popularity' : popularity, 'movie_url': movie_url,"imdb_id":imdb_id,'synopsis' : synopsis}, callback=self.parse_movie, dont_filter=True)
         
     def parse_movie(self, response):
         pg_rating = str()
@@ -132,14 +141,13 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         streaming_sources = []
         genres = str()
         length = str()
-        imdb_id = ''
         poster_url = ''
         back_drop_url = ''
         imdb_rating = None
-
+ 
+        imdb_id = response.meta.get('imdb_id')
         popularity = response.meta.get('popularity')
         web_deep_link = response.meta.get('movie_url')
-        imdb_url = response.meta.get('imdb_url')
         movie_id = web_deep_link.split('/')[-1]
         title = response.xpath('//div[@class="title-block"]//h1/text()').get()
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
@@ -169,8 +177,6 @@ class ScrapeJustwatchSpider(scrapy.Spider):
 
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
-        if imdb_url:
-            imdb_id = imdb_url.split('/')[-2]
 
         streaming_sources = response.css(
             'div.buybox-row.stream div.buybox-row__offers img.offer__icon::attr(alt)').getall()
@@ -236,10 +242,9 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         genres = str()
         length = str()
         back_drop_url = ''
-        imdb_id = ''
         poster_url = ''
+        imdb_id = response.meta.get('imdb_id')
         web_deep_link = response.meta.get('movie_url')
-        imdb_url = response.meta.get('imdb_url')
 
         movie_name = web_deep_link.split('/')[-2]
         season_name = web_deep_link.split('/')[-1]
@@ -286,9 +291,6 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                 imdb_rating = parent_span.css('::text').get().strip()
         if imdb_rating:
             imdb_rating = imdb_rating.split('(')[0]
-
-        if imdb_url:
-            imdb_id = imdb_url.split('/')[-2]
 
         streaming_sources = response.css(
             'div.buybox-row.stream div.buybox-row__offers img.offer__icon::attr(alt)').getall()
