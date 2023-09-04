@@ -41,8 +41,10 @@ class ScrapeJustwatchSpider(scrapy.Spider):
 
 
     urls_done = []
+    visited_urls = set()
+
     def start_requests(self):
-        with open('input_files/imdb_details_data_2023.csv','r') as file:
+        with open('input_files/product_testing.csv','r') as file:
             reader = csv.reader(file)
             for idx, row in enumerate(reader):
                 if idx == 0:  # Skip the header row
@@ -74,19 +76,21 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         for url in urls:
             link = url.xpath('ancestor::a/@href').get()
             complete_link = f"{base_url}{link}"
-            yield Request(
-                get_scrapeops_url(complete_link),
-                method='GET',
-                headers=self.headers,
-                meta = {
-                        'popularity' : popularity, 
-                        'movie_url': complete_link,
-                        'synopsis':response.meta.get('synopsis')
-                        }, 
-                callback=self.parse_movie_page, 
-                dont_filter=True
-            )
-            
+            if link not in self.visited_urls:
+                self.visited_urls.add(link)
+                yield Request(
+                    get_scrapeops_url(complete_link),
+                    method='GET',
+                    headers=self.headers,
+                    meta = {
+                            'popularity' : popularity, 
+                            'movie_url': complete_link,
+                            'synopsis':response.meta.get('synopsis')
+                            }, 
+                    callback=self.parse_movie_page, 
+                    dont_filter=True
+                )
+                
 
     def parse_movie_page(self, response):
         popularity = response.meta.get('popularity')
