@@ -46,16 +46,11 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     def start_requests(self):
         with open('input_files/product_testing.csv','r') as file:
             reader = csv.reader(file)
+            next(reader)
             for idx, row in enumerate(reader):
-                if idx == 0:  # Skip the header row
-                    continue
                 name = row[3]  ##name
                 popularity = row[7]  ##popularity 
                 self.urls_done.append(row[21])  ##url
-
-                # name = row[0]
-                # popularity = row[2]
-                # self.urls_done.append(row[1])
                 search_query = f"{base_url}/in/search?q={name}"
                 yield Request(search_query, method='GET', headers=self.headers, meta = {'popularity' : popularity,"synopsis":row[8]}, callback=self.search_result_links)
         
