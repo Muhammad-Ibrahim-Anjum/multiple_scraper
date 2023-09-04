@@ -240,6 +240,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         length = str()
         back_drop_url = ''
         poster_url = ''
+        imdb_rating = None
         imdb_id = response.meta.get('imdb_id')
         web_deep_link = response.meta.get('movie_url')
 
