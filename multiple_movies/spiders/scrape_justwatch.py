@@ -295,12 +295,12 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         streaming_sources = list(set(streaming_sources))
         detail_info_tags = response.xpath('//div[@class="detail-infos"]')
         for tag in detail_info_tags:
-            h3_tag = tag.css('[class="detail-infos__subheading--label"]::text').get()
+            h3_tag = tag.css('h3.detail-infos__subheading::text').get()
             if h3_tag:
                 if 'Genres' in h3_tag:
-                    genres = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                    genres = tag.css('div.detail-infos__value::text').get()
                 if 'Runtime' in  h3_tag:
-                    runtime = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                    runtime = tag.css('div.detail-infos__value::text').get()
                     if 'h' in runtime:
                         hours = runtime.split('h')[0]
                         if hours:
@@ -316,9 +316,9 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                     else:
                         length = runtime
                 if 'Age rating' in h3_tag:
-                    pg_rating = tag.css('[class="detail-infos__subheading"]+div::text').get()
+                    pg_rating = tag.css('div.detail-infos__value::text').get()
                 if 'Director' in h3_tag:
-                    director = tag.css('[class="detail-infos__subheading"]+div span::text').get()
+                    director = tag.css('div.detail-infos__value span::text').get()
             casts_tags = response.css('div.title-credits__actor span.title-credit-name')
             for cast in casts_tags:
                 actor = cast.css('::text').get()
