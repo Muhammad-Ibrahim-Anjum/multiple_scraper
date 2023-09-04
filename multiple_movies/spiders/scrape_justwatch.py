@@ -68,12 +68,6 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     
 
     def search_result_links(self, response):
-        imdb_id = re.findall(r'"imdbId":"(.+?)"', response.text)
-        if len(imdb_id)>0:
-            imdb_id = imdb_id[0]
-        else:
-            imdb_id = ''
-
         urls = response.css(f'a.title-list-row__column-header span.header-year:contains("{YEAR}")')
         popularity = response.meta.get('popularity')
 
@@ -87,7 +81,6 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                 meta = {
                         'popularity' : popularity, 
                         'movie_url': complete_link,
-                        'imdb_id':imdb_id,
                         'synopsis':response.meta.get('synopsis')
                         }, 
                 callback=self.parse_movie_page, 
@@ -98,8 +91,13 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     def parse_movie_page(self, response):
         popularity = response.meta.get('popularity')
         movie_url = response.meta.get('movie_url')
-        imdb_id = response.meta.get('imdb_id')
         synopsis = response.meta.get('synopsis')
+
+        imdb_id = re.findall(r'"imdbId":"(.+?)"', response.text)
+        if len(imdb_id)>0:
+            imdb_id = imdb_id[0]
+        else:
+            imdb_id = ''
 
         year = response.xpath('//div[@class="title-block"]//span[@class="text-muted"]/text()').get()
         year = year.replace('(','').replace(')','')
