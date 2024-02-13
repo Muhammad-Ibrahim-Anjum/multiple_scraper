@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from multiple_movies.items import MultipleMoviesItem
 from creds import API_KEY, origin, referer, authority, allowed_domains, base_url
 
-YEAR = '2023'
+YEAR = '2022'
 
 
 def get_scrapeops_url(url):
@@ -23,7 +23,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     name = 'scrape_justwatch_with_search_query'
     custom_settings = {
         'FEEDS': {
-            'output/multiple_data.csv': {
+            'output/multiple_data_2022.csv': {
                 'format': 'csv',
             }
         },
@@ -45,12 +45,12 @@ class ScrapeJustwatchSpider(scrapy.Spider):
     visited_urls = set()
 
     def start_requests(self):
-        with open('input_files/product_testing.csv', 'r') as file:
+        with open('input_files/imdb_details_data_2022.csv', 'r') as file:
             reader = csv.reader(file)
             next(reader)
             for idx, row in enumerate(reader):
                 name = row[3]  # name
-                popularity = row[7]  # popularity
+                popularity = ''  # popularity
                 self.urls_done.append(row[21])  # url
                 search_query = f"{base_url}/in/search?q={name}"
                 yield Request(search_query, method='GET', headers=self.headers, meta={'popularity': popularity, "synopsis": row[8]}, callback=self.search_result_links)
@@ -208,9 +208,12 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                             total_minutes = hours_to_mins + int(min_string)
                         else:
                             total_minutes = hours_to_mins
-                        length = f"{total_minutes} Min"
+                        length = f"{total_minutes} min"
+                elif 'min' in runtime:
+                        length = re.sub(r'(\d)(min)', r'\1 \2', runtime)
                 else:
                     length = runtime
+                    
             if h3_tag and 'Director' in h3_tag:
                 director = tag.css(
                     '[class="detail-infos__subheading"]+div span::text').get()
@@ -280,7 +283,7 @@ class ScrapeJustwatchSpider(scrapy.Spider):
         for episode in episodes_list:
             episode_name = episode.css('*::text').get()
             episodes.append(episode_name)
-        print(title, season, episodes)
+            
         posters_tag = response.css(
             'aside div[class="hidden-sm visible-md visible-lg title-sidebar__desktop"] picture[class="picture-comp title-poster__image"] ')
         poster_url_list = posters_tag.xpath(
@@ -334,6 +337,8 @@ class ScrapeJustwatchSpider(scrapy.Spider):
                             else:
                                 total_minutes = hours_to_mins
                             length = f"{total_minutes} Min"
+                    elif 'min' in runtime:
+                        length = re.sub(r'(\d)(min)', r'\1 \2', runtime)
                     else:
                         length = runtime
                 if 'Age rating' in h3_tag:
